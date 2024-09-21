@@ -2,13 +2,15 @@ package btree
 
 import (
 	"encoding/binary"
+	"fmt"
+	"strings"
 
 	. "github.com/cahyasetya/cdb/util"
 )
 
 const (
-	BNODE_NODE = 1
-	BNODE_LEAF = 2
+	BNODE_NODE uint16 = 1
+	BNODE_LEAF uint16 = 2
 )
 
 // BNode represents a node in the B-tree
@@ -17,8 +19,9 @@ type BNode []byte
 // btype returns the type of the node (BNODE_NODE or BNODE_LEAF)
 //
 // Example:
-//   First two bytes: 01 00 -> Returns: 1 (BNODE_NODE)
-//   First two bytes: 02 00 -> Returns: 2 (BNODE_LEAF)
+//
+//	First two bytes: 01 00 -> Returns: 1 (BNODE_NODE)
+//	First two bytes: 02 00 -> Returns: 2 (BNODE_LEAF)
 func (node BNode) btype() uint16 {
 	return binary.LittleEndian.Uint16(node[0:2])
 }
@@ -26,10 +29,25 @@ func (node BNode) btype() uint16 {
 // nkeys returns the number of keys in the node
 //
 // Example:
-//   First four bytes: 01 00 03 00 -> Returns: 3 (3 keys in the node)
-//   First four bytes: 02 00 0A 00 -> Returns: 10 (10 keys in the node)
+//
+//	First four bytes: 01 00 03 00 -> Returns: 3 (3 keys in the node)
+//	First four bytes: 02 00 0A 00 -> Returns: 10 (10 keys in the node)
 func (node BNode) nkeys() uint16 {
 	return binary.LittleEndian.Uint16(node[2:4])
+}
+
+// getHeader returns the header of the node
+func (node BNode) getHeader() struct {
+	typ   uint16
+	nkeys uint16
+} {
+	return struct {
+		typ   uint16
+		nkeys uint16
+	}{
+		typ:   node.btype(),
+		nkeys: node.nkeys(),
+	}
 }
 
 // setHeader sets the node type and number of keys in the node header
@@ -57,7 +75,8 @@ func (node BNode) getOffset(idx uint16) uint16 {
 	if idx == 0 {
 		return 0
 	}
-	return binary.LittleEndian.Uint16(node[offsetPos(node, idx):])
+	pos := offsetPos(node, idx)
+	return binary.LittleEndian.Uint16(node[pos:])
 }
 
 // setOffset sets the offset value for a given index
@@ -69,7 +88,8 @@ func (node BNode) setOffset(idx uint16, val uint16) {
 // kvPos calculates the position of the key-value pair for a given index
 func (node BNode) kvPos(idx uint16) uint16 {
 	Assert(idx <= node.nkeys())
-	return HEADER + 8*node.nkeys() + 2*node.nkeys() + node.getOffset(idx)
+	offset := node.getOffset(idx)
+	return HEADER + 8*node.nkeys() + 2*node.nkeys() + offset
 }
 
 // getKey retrieves the key at the given index
@@ -92,4 +112,19 @@ func (node BNode) getVal(idx uint16) []byte {
 // nbytes returns the total number of bytes used in the node
 func (node BNode) nbytes() uint16 {
 	return node.kvPos(node.nkeys())
+}
+
+func (node BNode) String() string {
+	var builder strings.Builder
+	for i, b := range node {
+		if i > 0 {
+			if i%16 == 0 {
+				builder.WriteString("\n")
+			} else {
+				builder.WriteString(" ")
+			}
+		}
+		builder.WriteString(fmt.Sprintf("%3d", b))
+	}
+	return builder.String()
 }
